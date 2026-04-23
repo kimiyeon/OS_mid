@@ -1,0 +1,2 @@
+- Prompt: designed Ralph Mode multi-agent debate pipeline
+- Validation: refined Plan, Execution, Verification, Gate, and Logging roles
