@@ -1,55 +1,35 @@
 import os
-import json
+from dotenv import load_dotenv
+from deepagents import create_deep_agent
+from langchain_openrouter import ChatOpenRouter
 
-TOPIC = input("주제를 입력하세요: ")
+load_dotenv()
 
-# 1. PLAN
-plan = f"""
-Topic: {TOPIC}
-- Structure: Pro vs Con
-- Each side must have 2 arguments
-- Each argument must include reasoning
+model = ChatOpenRouter(
+    model="openai/gpt-4o-mini",  # 테스트용 (나중에 바꿔도 됨)
+    temperature=0
+)
+
+agent = create_deep_agent(
+    model=model,
+    system_prompt="""
+You are a structured debate agent.
+
+For any topic, generate:
+1. Plan
+2. Execution (Pro/Con)
+3. Verification
+4. Gate
+5. Logging summary
 """
-with open("artifacts/plan.md", "w") as f:
-    f.write(plan)
+)
 
-# 2. EXECUTION
-debate = f"""
-[PRO]
-1. Argument A about {TOPIC} (reason included)
-2. Argument B about {TOPIC} (reason included)
+topic = input("주제를 입력하세요: ")
 
-[CON]
-1. Argument A against {TOPIC} (reason included)
-2. Argument B against {TOPIC} (reason included)
-"""
-with open("artifacts/debate.md", "w") as f:
-    f.write(debate)
+result = agent.invoke({
+    "messages": [
+        {"role": "user", "content": f"Create a structured pro-con debate about: {topic}"}
+    ]
+})
 
-# 3. VERIFICATION
-verification = """
-- Structure OK
-- Pro/Con balance OK
-- Arguments contain reasoning
-"""
-with open("artifacts/verification.md", "w") as f:
-    f.write(verification)
-
-# 4. GATE
-gate = {
-    "status": "PASS",
-    "reason": "All constraints satisfied"
-}
-with open("artifacts/gate.json", "w") as f:
-    json.dump(gate, f, indent=2)
-
-# 5. LOG
-log_entry = f"""
-Iteration:
-Topic: {TOPIC}
-Result: PASS
-"""
-with open("docs/ralph-log.md", "a") as f:
-    f.write(log_entry)
-
-print("완료")
+print(result)
