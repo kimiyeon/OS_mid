@@ -14,45 +14,157 @@ if not api_key:
 MODELS = {
     "gpt4o_mini": "openai/gpt-4o-mini",
     "claude_haiku": "anthropic/claude-3-haiku",
-    "gemini_flash": "google/gemini-pro"
+    "gemini": "google/gemini-pro",
 }
 
-SYSTEM_PROMPT = """
-You are a structured multi-agent debate system.
 
-Follow this framework:
-1. Plan
-2. Execution
-3. Verification
-4. Gate
-5. Logging
+def build_model(model_name: str):
+    return ChatOpenRouter(
+        model=model_name,
+        temperature=0,
+        api_key=api_key,
+    )
 
-Execution stage must contain:
-- Pro Agent: argues in favor of the motion
-- Con Agent: argues against the motion
-- Judge Agent: evaluates both sides and decides which side was more persuasive
 
-Rules:
-- Both Pro and Con must present at least 2 arguments
-- Arguments should be logical and respectful
-- No emotional attacks
-- Judge must evaluate based on:
+def invoke_agent(agent, prompt: str) -> str:
+    result = agent.invoke({
+        "messages": [
+            {"role": "user", "content": prompt}
+        ]
+    })
+
+    if result.get("messages"):
+        return result["messages"][-1].content
+
+    return str(result)
+
+
+def create_agent(model_name: str, role_prompt: str):
+    return create_deep_agent(
+        model=build_model(model_name),
+        system_prompt=role_prompt,
+    )
+
+
+PLANNING_PROMPT = """
+You are the Planning Agent.
+
+Your job:
+- Analyze the debate topic.
+- Define debate rules.
+- Define evaluation criteria for the Judge Agent.
+- Create a clear debate plan.
+
+Output format:
+[Plan]
+- Topic Analysis:
+- Debate Rules:
+- Evaluation Criteria:
+"""
+
+PRO_PROMPT = """
+You are the Pro Agent.
+
+Your job:
+- Argue in favor of the topic.
+- Present at least 2 logical arguments.
+- Use respectful and evidence-based reasoning.
+- Do not attack the opposing side emotionally.
+
+Output format:
+[Pro Agent]
+1. Argument:
+   Reason:
+2. Argument:
+   Reason:
+"""
+
+CON_PROMPT = """
+You are the Con Agent.
+
+Your job:
+- Argue against the topic.
+- Present at least 2 logical arguments.
+- Respond to the Pro Agent's main claims.
+- Use respectful and evidence-based reasoning.
+
+Output format:
+[Con Agent]
+1. Counterargument:
+   Reason:
+2. Counterargument:
+   Reason:
+"""
+
+JUDGE_PROMPT = """
+You are the Judge Agent.
+
+Your job:
+- Compare the Pro Agent and Con Agent outputs.
+- Evaluate both sides based on:
   1. logical consistency
   2. strength of reasoning
   3. directness of rebuttal
   4. overall persuasiveness
+- You MUST choose either PRO or CON.
+- Do not remain neutral.
 
-At the end, output MUST include exactly these two lines:
-
+At the end, output exactly these two lines:
 Final Decision: PRO or CON
 Winning Reason: <1-2 sentences, under 40 words, explaining why that side was more persuasive>
-
-Before the final decision, provide these sections:
-[Plan]
-[Execution]
-[Verification]
-[Gate]
 """
+
+VERIFICATION_PROMPT = """
+You are the Verification Agent.
+
+Your job:
+- Check whether the debate follows the plan.
+- Check whether Pro and Con outputs both exist.
+- Check whether Judge chose either PRO or CON.
+- Check whether Winning Reason exists.
+- Identify format or logic problems.
+
+Output format:
+[Verification]
+- Pro exists:
+- Con exists:
+- Judge decision valid:
+- Winning reason exists:
+- Issues:
+"""
+
+GATE_PROMPT = """
+You are the Gate Agent.
+
+Your job:
+- Decide whether the result should PASS or FAIL.
+- PASS only if:
+  1. Pro output exists
+  2. Con output exists
+  3. Judge selected PRO or CON
+  4. Winning Reason exists
+- Otherwise FAIL.
+
+Output format:
+Gate Status: PASS or FAIL
+Gate Reason: <short reason>
+"""
+
+LOGGING_PROMPT = """
+You are the Logging Agent.
+
+Your job:
+- Summarize what happened in this run.
+- Record topic, model, final decision, and improvement points.
+
+Output format:
+[Logging]
+- Topic:
+- Model:
+- Final Decision:
+- Summary:
+"""
+
 
 def extract_decision_and_reason(text: str):
     decision = "UNKNOWN"
@@ -67,52 +179,182 @@ def extract_decision_and_reason(text: str):
 
     return decision, reason
 
+
 def save_text(path: str, content: str):
     with open(path, "w", encoding="utf-8") as f:
         f.write(content)
+
 
 def append_log(path: str, content: str):
     with open(path, "a", encoding="utf-8") as f:
         f.write(content)
 
-def run_model(model_label: str, model_name: str, topic: str):
+
+def run_pipeline(model_label: str, model_name: str, topic: str):
     print(f"\n=== Running {model_label} ({model_name}) ===")
 
-    model = ChatOpenRouter(
-        model=model_name,
-        temperature=0,
-        api_key=api_key,
+    planning_agent = create_agent(model_name, PLANNING_PROMPT)
+    pro_agent = create_agent(model_name, PRO_PROMPT)
+    con_agent = create_agent(model_name, CON_PROMPT)
+    judge_agent = create_agent(model_name, JUDGE_PROMPT)
+    verification_agent = create_agent(model_name, VERIFICATION_PROMPT)
+    gate_agent = create_agent(model_name, GATE_PROMPT)
+    logging_agent = create_agent(model_name, LOGGING_PROMPT)
+
+    plan = invoke_agent(
+        planning_agent,
+        f"Create a debate plan for this topic: {topic}"
     )
 
-    agent = create_deep_agent(
-        model=model,
-        system_prompt=SYSTEM_PROMPT,
+    pro_output = invoke_agent(
+        pro_agent,
+        f"""
+Topic: {topic}
+
+Debate Plan:
+{plan}
+
+Generate the Pro side argument.
+"""
     )
 
-    result = agent.invoke({
-        "messages": [
-            {
-                "role": "user",
-                "content": f"Create a structured pro-con debate about: {topic}"
-            }
-        ]
-    })
+    con_output = invoke_agent(
+        con_agent,
+        f"""
+Topic: {topic}
 
-    final_output = ""
-    if result.get("messages"):
-        final_output = result["messages"][-1].content
-    else:
-        final_output = str(result)
+Debate Plan:
+{plan}
 
-    decision, reason = extract_decision_and_reason(final_output)
+Pro Agent Output:
+{pro_output}
+
+Generate the Con side argument and rebuttal.
+"""
+    )
+
+    judge_output = invoke_agent(
+        judge_agent,
+        f"""
+Topic: {topic}
+
+Debate Plan:
+{plan}
+
+Pro Agent Output:
+{pro_output}
+
+Con Agent Output:
+{con_output}
+
+Evaluate both sides and choose the more persuasive side.
+"""
+    )
+
+    decision, reason = extract_decision_and_reason(judge_output)
+
+    verification_output = invoke_agent(
+        verification_agent,
+        f"""
+Topic: {topic}
+
+Plan:
+{plan}
+
+Pro Agent Output:
+{pro_output}
+
+Con Agent Output:
+{con_output}
+
+Judge Agent Output:
+{judge_output}
+"""
+    )
+
+    gate_output = invoke_agent(
+        gate_agent,
+        f"""
+Topic: {topic}
+
+Verification Output:
+{verification_output}
+
+Judge Decision: {decision}
+Winning Reason: {reason}
+"""
+    )
+
+    logging_output = invoke_agent(
+        logging_agent,
+        f"""
+Topic: {topic}
+Model: {model_label} ({model_name})
+Final Decision: {decision}
+Winning Reason: {reason}
+
+Plan:
+{plan}
+
+Pro:
+{pro_output}
+
+Con:
+{con_output}
+
+Judge:
+{judge_output}
+
+Verification:
+{verification_output}
+
+Gate:
+{gate_output}
+"""
+    )
+
+    full_report = f"""# Debate Report - {model_label}
+
+## Topic
+{topic}
+
+## Planning Agent
+{plan}
+
+## Pro Agent
+{pro_output}
+
+## Con Agent
+{con_output}
+
+## Judge Agent
+{judge_output}
+
+## Verification Agent
+{verification_output}
+
+## Gate Agent
+{gate_output}
+
+## Logging Agent
+{logging_output}
+"""
 
     return {
         "model_label": model_label,
         "model_name": model_name,
-        "output": final_output,
+        "plan": plan,
+        "pro": pro_output,
+        "con": con_output,
+        "judge": judge_output,
+        "verification": verification_output,
+        "gate": gate_output,
+        "log": logging_output,
         "decision": decision,
         "reason": reason,
+        "report": full_report,
     }
+
 
 def main():
     os.makedirs("artifacts", exist_ok=True)
@@ -125,30 +367,28 @@ def main():
 
     for label, model_name in MODELS.items():
         try:
-            result = run_model(label, model_name, topic)
+            result = run_pipeline(label, model_name, topic)
             results.append(result)
-
-            save_text(
-                f"artifacts/debate_{label}.md",
-                result["output"]
-            )
+            save_text(f"artifacts/debate_{label}.md", result["report"])
 
         except Exception as e:
-            error_text = f"Model: {label}\nError: {str(e)}"
-            save_text(f"artifacts/debate_{label}.md", error_text)
+            error_report = f"# Error Report - {label}\n\nModel: {model_name}\n\nError: {str(e)}\n"
+            save_text(f"artifacts/debate_{label}.md", error_report)
+
             results.append({
                 "model_label": label,
                 "model_name": model_name,
-                "output": error_text,
                 "decision": "ERROR",
                 "reason": str(e),
+                "report": error_report,
             })
 
-    comparison_lines = []
-    comparison_lines.append("# Model Comparison Result")
-    comparison_lines.append("")
-    comparison_lines.append(f"Topic: {topic}")
-    comparison_lines.append("")
+    comparison_lines = [
+        "# Model Comparison Result",
+        "",
+        f"Topic: {topic}",
+        "",
+    ]
 
     for r in results:
         comparison_lines.append(f"## {r['model_label']} ({r['model_name']})")
@@ -158,29 +398,33 @@ def main():
 
     comparison_text = "\n".join(comparison_lines)
     save_text("artifacts/model_comparison.md", comparison_text)
-        # Plan output
+
     plan_text = f"""# Plan
 
 Topic: {topic}
 
-Framework:
-1. Plan: analyze the topic and define debate rules
-2. Execution: run Pro Agent, Con Agent, and Judge Agent
-3. Verification: check whether outputs follow the required format
-4. Gate: decide whether the run is valid
-5. Logging: record outputs and model comparison
+System Framework:
+1. Planning Agent
+2. Execution Stage
+   - Pro Agent
+   - Con Agent
+   - Judge Agent
+3. Verification Agent
+4. Gate Agent
+5. Logging Agent
 
-Debate Rules:
-- Each model must generate a structured pro-con debate.
-- Pro Agent must argue in favor of the topic.
-- Con Agent must argue against the topic.
-- Judge Agent must choose either PRO or CON.
-- Judge Agent must provide a Winning Reason.
+Models Tested:
+{", ".join(MODELS.values())}
 """
     save_text("artifacts/plan.md", plan_text)
 
-    # Verification output
-    verification_lines = ["# Verification", "", f"Topic: {topic}", ""]
+    verification_lines = [
+        "# Verification",
+        "",
+        f"Topic: {topic}",
+        "",
+    ]
+
     all_valid = True
 
     for r in results:
@@ -197,10 +441,12 @@ Debate Rules:
         verification_lines.append(f"- Error free: {error_free}")
         verification_lines.append("")
 
+    verification_lines.append("## Overall")
+    verification_lines.append(f"- PASS: {all_valid}")
+
     verification_text = "\n".join(verification_lines)
     save_text("artifacts/verification.md", verification_text)
 
-    # Gate output
     gate_data = {
         "status": "PASS" if all_valid else "FAIL",
         "reason": (
@@ -211,18 +457,18 @@ Debate Rules:
         "criteria": [
             "Each model must output Final Decision as PRO or CON",
             "Each model must include Winning Reason",
-            "No model should return ERROR"
+            "No model should return ERROR",
         ],
         "model_results": {
             r["model_label"]: {
                 "model": r["model_name"],
                 "decision": r["decision"],
-                "reason": r["reason"]
+                "reason": r["reason"],
             }
             for r in results
         },
         "timestamp": timestamp,
-        "topic": topic
+        "topic": topic,
     }
 
     with open("artifacts/gate.json", "w", encoding="utf-8") as f:
@@ -231,10 +477,12 @@ Debate Rules:
     log_text = f"""
 ## {timestamp}
 - Topic: {topic}
+- Gate status: {"PASS" if all_valid else "FAIL"}
 - Models tested: {", ".join(MODELS.keys())}
 """
+
     for r in results:
-        log_text += f"- Gate status: {'PASS' if all_valid else 'FAIL'}\n"
+        log_text += f"- {r['model_label']}: {r['decision']} | {r['reason']}\n"
 
     append_log("docs/ralph-log.md", log_text)
 
