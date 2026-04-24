@@ -361,45 +361,49 @@ def main():
     os.makedirs("docs", exist_ok=True)
 
     topic = input("주제를 입력하세요: ").strip()
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    results = []
+    for iteration in range(2):
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"\n===== Iteration {iteration + 1} =====")
 
-    for label, model_name in MODELS.items():
-        try:
-            result = run_pipeline(label, model_name, topic)
-            results.append(result)
-            save_text(f"artifacts/debate_{label}.md", result["report"])
+        results = []
 
-        except Exception as e:
-            error_report = f"# Error Report - {label}\n\nModel: {model_name}\n\nError: {str(e)}\n"
-            save_text(f"artifacts/debate_{label}.md", error_report)
+        for label, model_name in MODELS.items():
+            try:
+                result = run_pipeline(label, model_name, topic)
+                results.append(result)
+                save_text(f"artifacts/debate_{label}_iter{iteration + 1}.md", result["report"])
 
-            results.append({
-                "model_label": label,
-                "model_name": model_name,
-                "decision": "ERROR",
-                "reason": str(e),
-                "report": error_report,
-            })
+            except Exception as e:
+                error_report = f"# Error Report - {label}\n\nModel: {model_name}\n\nError: {str(e)}\n"
+                save_text(f"artifacts/debate_{label}_iter{iteration + 1}.md", error_report)
 
-    comparison_lines = [
-        "# Model Comparison Result",
-        "",
-        f"Topic: {topic}",
-        "",
-    ]
+                results.append({
+                    "model_label": label,
+                    "model_name": model_name,
+                    "decision": "ERROR",
+                    "reason": str(e),
+                    "report": error_report,
+                })
 
-    for r in results:
-        comparison_lines.append(f"## {r['model_label']} ({r['model_name']})")
-        comparison_lines.append(f"- Final Decision: {r['decision']}")
-        comparison_lines.append(f"- Winning Reason: {r['reason']}")
-        comparison_lines.append("")
+        comparison_lines = [
+            f"# Model Comparison Result - Iteration {iteration + 1}",
+            "",
+            f"Topic: {topic}",
+            "",
+        ]
 
-    comparison_text = "\n".join(comparison_lines)
-    save_text("artifacts/model_comparison.md", comparison_text)
+        for r in results:
+            comparison_lines.append(f"## {r['model_label']} ({r['model_name']})")
+            comparison_lines.append(f"- Final Decision: {r['decision']}")
+            comparison_lines.append(f"- Winning Reason: {r['reason']}")
+            comparison_lines.append("")
 
-    plan_text = f"""# Plan
+        comparison_text = "\n".join(comparison_lines)
+        save_text(f"artifacts/model_comparison_iter{iteration + 1}.md", comparison_text)
+        save_text("artifacts/model_comparison.md", comparison_text)
+
+        plan_text = f"""# Plan - Iteration {iteration + 1}
 
 Topic: {topic}
 
@@ -416,78 +420,110 @@ System Framework:
 Models Tested:
 {", ".join(MODELS.values())}
 """
-    save_text("artifacts/plan.md", plan_text)
+        save_text("artifacts/plan.md", plan_text)
 
-    verification_lines = [
-        "# Verification",
-        "",
-        f"Topic: {topic}",
-        "",
-    ]
+        verification_lines = [
+            f"# Verification - Iteration {iteration + 1}",
+            "",
+            f"Topic: {topic}",
+            "",
+        ]
 
-    all_valid = True
+        all_valid = True
 
-    for r in results:
-        decision_valid = r["decision"] in ["PRO", "CON"]
-        reason_valid = r["reason"] != "No clear reason found." and bool(r["reason"].strip())
-        error_free = r["decision"] != "ERROR"
+        for r in results:
+            decision_valid = r["decision"] in ["PRO", "CON"]
+            reason_valid = r["reason"] != "No clear reason found." and bool(r["reason"].strip())
+            error_free = r["decision"] != "ERROR"
 
-        if not (decision_valid and reason_valid and error_free):
-            all_valid = False
+            if not (decision_valid and reason_valid and error_free):
+                all_valid = False
 
-        verification_lines.append(f"## {r['model_label']}")
-        verification_lines.append(f"- Decision valid: {decision_valid}")
-        verification_lines.append(f"- Winning reason present: {reason_valid}")
-        verification_lines.append(f"- Error free: {error_free}")
-        verification_lines.append("")
+            verification_lines.append(f"## {r['model_label']}")
+            verification_lines.append(f"- Decision valid: {decision_valid}")
+            verification_lines.append(f"- Winning reason present: {reason_valid}")
+            verification_lines.append(f"- Error free: {error_free}")
+            verification_lines.append("")
 
-    verification_lines.append("## Overall")
-    verification_lines.append(f"- PASS: {all_valid}")
+        verification_lines.append("## Overall")
+        verification_lines.append(f"- PASS: {all_valid}")
 
-    verification_text = "\n".join(verification_lines)
-    save_text("artifacts/verification.md", verification_text)
+        verification_text = "\n".join(verification_lines)
+        save_text("artifacts/verification.md", verification_text)
 
-    gate_data = {
-        "status": "PASS" if all_valid else "FAIL",
-        "reason": (
-            "All models produced valid PRO/CON decisions with winning reasons."
-            if all_valid
-            else "Some models failed to produce a valid PRO/CON decision, winning reason, or returned an error."
-        ),
-        "criteria": [
-            "Each model must output Final Decision as PRO or CON",
-            "Each model must include Winning Reason",
-            "No model should return ERROR",
-        ],
-        "model_results": {
-            r["model_label"]: {
-                "model": r["model_name"],
-                "decision": r["decision"],
-                "reason": r["reason"],
-            }
-            for r in results
-        },
-        "timestamp": timestamp,
-        "topic": topic,
-    }
+        gate_data = {
+            "status": "PASS" if all_valid else "FAIL",
+            "reason": (
+                "All models produced valid PRO/CON decisions with winning reasons."
+                if all_valid
+                else "Some models failed to produce a valid PRO/CON decision, winning reason, or returned an error."
+            ),
+            "criteria": [
+                "Each model must output Final Decision as PRO or CON",
+                "Each model must include Winning Reason",
+                "No model should return ERROR",
+            ],
+            "model_results": {
+                r["model_label"]: {
+                    "model": r["model_name"],
+                    "decision": r["decision"],
+                    "reason": r["reason"],
+                }
+                for r in results
+            },
+            "timestamp": timestamp,
+            "topic": topic,
+            "iteration": iteration + 1,
+        }
 
-    with open("artifacts/gate.json", "w", encoding="utf-8") as f:
-        json.dump(gate_data, f, ensure_ascii=False, indent=2)
+        with open("artifacts/gate.json", "w", encoding="utf-8") as f:
+            json.dump(gate_data, f, ensure_ascii=False, indent=2)
 
-    log_text = f"""
-## {timestamp}
+        log_text = f"""
+## Iteration {iteration + 1} - {timestamp}
+
+### Input
 - Topic: {topic}
-- Gate status: {"PASS" if all_valid else "FAIL"}
-- Models tested: {", ".join(MODELS.keys())}
+
+### Model Results
 """
 
-    for r in results:
-        log_text += f"- {r['model_label']}: {r['decision']} | {r['reason']}\n"
+        for r in results:
+            log_text += f"- {r['model_label']}: {r['decision']} | {r['reason']}\n"
 
-    append_log("docs/ralph-log.md", log_text)
+        log_text += f"""
+### Gate
+- Status: {"PASS" if all_valid else "FAIL"}
 
-    print("\n=== Model Comparison Result ===\n")
-    print(comparison_text)
+### Problems Found
+"""
+
+        problems = []
+
+        for r in results:
+            if r["decision"] not in ["PRO", "CON"]:
+                problems.append(f"- {r['model_label']} did not produce a valid PRO/CON decision.")
+            if r["decision"] == "ERROR":
+                problems.append(f"- {r['model_label']} returned an error: {r['reason']}")
+            if r["reason"] == "No clear reason found.":
+                problems.append(f"- {r['model_label']} did not provide a clear winning reason.")
+
+        if problems:
+            log_text += "\n".join(problems) + "\n"
+        else:
+            log_text += "- No major problems found.\n"
+
+        log_text += """
+### Next Improvement
+- Strengthen Judge Agent output format if decisions are invalid.
+- Replace unavailable model endpoints if model errors occur.
+- Improve prompts if winning reasons are too vague.
+"""
+
+        append_log("docs/ralph-log.md", log_text)
+
+        print("\n=== Model Comparison Result ===\n")
+        print(comparison_text)
 
 
 if __name__ == "__main__":
