@@ -1,4 +1,5 @@
 import os
+import json
 from datetime import datetime
 from dotenv import load_dotenv
 from deepagents import create_deep_agent
@@ -157,6 +158,75 @@ def main():
 
     comparison_text = "\n".join(comparison_lines)
     save_text("artifacts/model_comparison.md", comparison_text)
+        # Plan output
+    plan_text = f"""# Plan
+
+Topic: {topic}
+
+Framework:
+1. Plan: analyze the topic and define debate rules
+2. Execution: run Pro Agent, Con Agent, and Judge Agent
+3. Verification: check whether outputs follow the required format
+4. Gate: decide whether the run is valid
+5. Logging: record outputs and model comparison
+
+Debate Rules:
+- Each model must generate a structured pro-con debate.
+- Pro Agent must argue in favor of the topic.
+- Con Agent must argue against the topic.
+- Judge Agent must choose either PRO or CON.
+- Judge Agent must provide a Winning Reason.
+"""
+    save_text("artifacts/plan.md", plan_text)
+
+    # Verification output
+    verification_lines = ["# Verification", "", f"Topic: {topic}", ""]
+    all_valid = True
+
+    for r in results:
+        decision_valid = r["decision"] in ["PRO", "CON"]
+        reason_valid = r["reason"] != "No clear reason found." and bool(r["reason"].strip())
+        error_free = r["decision"] != "ERROR"
+
+        if not (decision_valid and reason_valid and error_free):
+            all_valid = False
+
+        verification_lines.append(f"## {r['model_label']}")
+        verification_lines.append(f"- Decision valid: {decision_valid}")
+        verification_lines.append(f"- Winning reason present: {reason_valid}")
+        verification_lines.append(f"- Error free: {error_free}")
+        verification_lines.append("")
+
+    verification_text = "\n".join(verification_lines)
+    save_text("artifacts/verification.md", verification_text)
+
+    # Gate output
+    gate_data = {
+        "status": "PASS" if all_valid else "FAIL",
+        "reason": (
+            "All models produced valid PRO/CON decisions with winning reasons."
+            if all_valid
+            else "Some models failed to produce a valid PRO/CON decision, winning reason, or returned an error."
+        ),
+        "criteria": [
+            "Each model must output Final Decision as PRO or CON",
+            "Each model must include Winning Reason",
+            "No model should return ERROR"
+        ],
+        "model_results": {
+            r["model_label"]: {
+                "model": r["model_name"],
+                "decision": r["decision"],
+                "reason": r["reason"]
+            }
+            for r in results
+        },
+        "timestamp": timestamp,
+        "topic": topic
+    }
+
+    with open("artifacts/gate.json", "w", encoding="utf-8") as f:
+        json.dump(gate_data, f, ensure_ascii=False, indent=2)
 
     log_text = f"""
 ## {timestamp}
@@ -164,7 +234,7 @@ def main():
 - Models tested: {", ".join(MODELS.keys())}
 """
     for r in results:
-        log_text += f"- {r['model_label']}: {r['decision']} | {r['reason']}\n"
+        log_text += f"- Gate status: {'PASS' if all_valid else 'FAIL'}\n"
 
     append_log("docs/ralph-log.md", log_text)
 
