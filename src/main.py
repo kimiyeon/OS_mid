@@ -1,5 +1,6 @@
 import os
 import json
+import pandas as pd
 from datetime import datetime
 from dotenv import load_dotenv
 from deepagents import create_deep_agent
@@ -385,6 +386,19 @@ def main():
                     "reason": str(e),
                     "report": error_report,
                 })
+
+
+        df = pd.DataFrame(results)
+
+        df_simple = df[["model_label", "decision"]]
+
+        df_summary = df["decision"].value_counts().reset_index()
+        df_summary.columns = ["decision", "count"]
+        df_summary["ratio"] = df_summary["count"] / df_summary["count"].sum()
+
+        df.to_csv(f"artifacts/results_iter{iteration + 1}.csv", index=False)
+        df_simple.to_csv(f"artifacts/model_decisions_iter{iteration + 1}.csv", index=False)
+        df_summary.to_csv(f"artifacts/decision_summary_iter{iteration + 1}.csv", index=False)
 
         comparison_lines = [
             f"# Model Comparison Result - Iteration {iteration + 1}",
