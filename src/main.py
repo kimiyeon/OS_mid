@@ -13,7 +13,7 @@ if not api_key:
 MODELS = {
     "gpt4o_mini": "openai/gpt-4o-mini",
     "claude_haiku": "anthropic/claude-3-haiku",
-    "gemini_flash": "google/gemini-2.0-flash-exp:free",
+    "gemini_flash": "google/gemini-pro"
 }
 
 SYSTEM_PROMPT = """
