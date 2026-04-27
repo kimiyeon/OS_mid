@@ -191,7 +191,7 @@ def append_log(path: str, content: str):
         f.write(content)
 
 
-def run_pipeline(model_label: str, model_name: str, topic: str):
+def run_pipeline(model_label: str, model_name: str, topic: str, previous_log=""):
     print(f"\n=== Running {model_label} ({model_name}) ===")
 
     planning_agent = create_agent(model_name, PLANNING_PROMPT)
@@ -237,19 +237,23 @@ Generate the Con side argument and rebuttal.
     judge_output = invoke_agent(
         judge_agent,
         f"""
-Topic: {topic}
 
-Debate Plan:
-{plan}
+    Previous Issues:
+    {previous_log}
+    Improve based on previous issues.
+    Topic: {topic}
 
-Pro Agent Output:
-{pro_output}
+    Debate Plan:
+    {plan}
 
-Con Agent Output:
-{con_output}
+    Pro Agent Output:
+    {pro_output}
 
-Evaluate both sides and choose the more persuasive side.
-"""
+    Con Agent Output:
+    {con_output}
+
+    Evaluate both sides and choose the more persuasive side.
+    """
     )
 
     decision, reason = extract_decision_and_reason(judge_output)
@@ -364,6 +368,11 @@ def main():
     topic = input("주제를 입력하세요: ").strip()
 
     for iteration in range(2):
+        previous_log = ""
+
+        if iteration > 0 and os.path.exists("docs/ralph-log.md"):
+            with open("docs/ralph-log.md", "r", encoding="utf-8") as f:
+                previous_log = f.read()[-2000:]  # 너무 길어지지 않게 자름
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         print(f"\n===== Iteration {iteration + 1} =====")
 
@@ -371,7 +380,7 @@ def main():
 
         for label, model_name in MODELS.items():
             try:
-                result = run_pipeline(label, model_name, topic)
+                result = run_pipeline(label, model_name, topic, previous_log)
                 results.append(result)
                 save_text(f"artifacts/debate_{label}_iter{iteration + 1}.md", result["report"])
 
