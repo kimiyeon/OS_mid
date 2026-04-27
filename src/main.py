@@ -412,9 +412,9 @@ def main():
         df_summary.columns = ["decision", "count"]
         df_summary["ratio"] = df_summary["count"] / df_summary["count"].sum()
 
-        df.to_csv(f"artifacts/results_iter{iteration + 1}.csv", index=False)
-        df_simple.to_csv(f"artifacts/model_decisions_iter{iteration + 1}.csv", index=False)
-        df_summary.to_csv(f"artifacts/decision_summary_iter{iteration + 1}.csv", index=False)
+        df.to_csv(f"artifacts/results_iter{iteration + 1}.csv", index=False, encoding="utf-8", errors="replace")
+        df_simple.to_csv(f"artifacts/model_decisions_iter{iteration + 1}.csv", index=False, encoding="utf-8", errors="replace")
+        df_summary.to_csv(f"artifacts/decision_summary_iter{iteration + 1}.csv", index=False, encoding="utf-8", errors="replace")
 
         comparison_lines = [
             f"# Model Comparison Result - Iteration {iteration + 1}",
