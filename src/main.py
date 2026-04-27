@@ -173,10 +173,17 @@ def extract_decision_and_reason(text: str):
 
     for line in text.splitlines():
         stripped = line.strip()
-        if stripped.startswith("Final Decision:"):
-            decision = stripped.replace("Final Decision:", "").strip()
-        elif stripped.startswith("Winning Reason:"):
-            reason = stripped.replace("Winning Reason:", "").strip()
+        lower = stripped.lower()
+
+        if lower.startswith("final decision:"):
+            raw = stripped.split(":", 1)[1].strip().upper()
+            if "PRO" in raw:
+                decision = "PRO"
+            elif "CON" in raw:
+                decision = "CON"
+
+        elif lower.startswith("winning reason:"):
+            reason = stripped.split(":", 1)[1].strip()
 
     return decision, reason
 
