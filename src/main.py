@@ -15,7 +15,7 @@ if not api_key:
 MODELS = {
     "gpt4o_mini": "openai/gpt-4o-mini",
     "claude_haiku": "anthropic/claude-3-haiku",
-    "gemini": "google/gemini-pro",
+    "mixtral": "mistralai/mixtral-8x7b-instruct"
 }
 
 
