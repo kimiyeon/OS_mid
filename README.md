@@ -97,3 +97,65 @@ docs/
 - Execution 단계에서 역할 기반 토론 구조 설계
 - 단일 AI가 아닌 상호작용 기반 판단 구조 구현
 - 반복 실행 및 로그 기반 개선 과정 기록
+
+
+## 🚀 How to Run (Docker)
+
+### 1. Clone Repository
+
+git clone https://github.com/kimiyeon/OS_mid.git  
+cd OS_mid
+
+---
+
+### 2. Set Environment Variable
+
+Create a `.env` file in the project root:
+
+OPENROUTER_API_KEY=your_api_key_here
+
+⚠️ Important:
+- Do NOT upload your `.env` file to GitHub
+- Each user must use their own API key
+
+---
+
+### 3. Build Docker Image
+
+docker build -t os-mid-agent .
+
+---
+
+### 4. Run the Project
+
+docker run -it --env-file .env \
+-v $(pwd)/artifacts:/app/artifacts \
+-v $(pwd)/docs:/app/docs \
+os-mid-agent
+
+---
+
+### 5. Input Example
+
+AI는 인간의 일자리를 대체해야 하는가?
+
+---
+
+### 6. Output Files
+
+After execution, results are saved in:
+
+artifacts/
+- model_comparison.md
+- decision_summary_iter*.csv
+- debate_*.md
+
+docs/
+- ralph-log.md
+
+---
+
+## 🔐 Security Note
+
+API keys are managed using `.env` and are never stored in the repository.
+Each user must provide their own API key to run the project.
